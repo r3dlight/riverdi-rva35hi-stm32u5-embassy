@@ -1,0 +1,37 @@
+[package]
+name = "riverdi-rva35hi-stm32u5-embassy"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "ILI9488 driver (Embassy-only) for the Riverdi RVA35HI-NUC144A 3.5\" LCD shield over STM32U5 FMC 8080 parallel, with embedded-graphics integration"
+repository = "https://github.com/r3dlight/riverdi-rva35hi-stm32u5-embassy"
+readme = "README.md"
+keywords = ["embassy", "stm32u5", "ili9488", "lcd", "no-std"]
+categories = ["embedded", "no-std", "hardware-support"]
+rust-version = "1.81"
+
+[features]
+# stm32u575zi is on by default so the crate builds standalone for `cargo doc`
+# and `cargo publish --dry-run`. Consumers targeting another U5 variant
+# (U585, U535, …) should opt out with `default-features = false` and select
+# their own MCU feature on `embassy-stm32`.
+default = ["defmt", "embassy-task", "stm32u575zi"]
+
+# Re-export the U575ZI feature on embassy-stm32. Picked because it matches
+# the Nucleo-U575ZI-Q board this driver was developed against.
+stm32u575zi = ["embassy-stm32/stm32u575zi"]
+
+# Logging via defmt. When off the driver is silent.
+defmt = ["dep:defmt"]
+
+# Expose the `display_task` Embassy task entry. Pulls in embassy-executor +
+# embassy-time. Off-by-default builds are pure-sync and drop those deps.
+embassy-task = ["dep:embassy-executor", "dep:embassy-time"]
+
+[dependencies]
+embassy-stm32 = { version = "0.2.0", default-features = false, features = ["unstable-pac"] }
+embedded-graphics = "0.8"
+cortex-m = { version = "0.7.6", features = ["inline-asm"] }
+defmt = { version = "0.3", optional = true }
+embassy-executor = { version = "0.7.0", optional = true, default-features = false }
+embassy-time = { version = "0.4.0", optional = true, default-features = false }
