@@ -21,6 +21,10 @@ default = ["defmt", "embassy-task", "stm32u575zi"]
 # the Nucleo-U575ZI-Q board this driver was developed against.
 stm32u575zi = ["embassy-stm32/stm32u575zi"]
 
+# Nucleo-U5A5ZJ (second demo board). The driver itself is chip-agnostic
+# (FMC 8080 + I2C touch); only the PAC selection changes.
+stm32u5a5zj = ["embassy-stm32/stm32u5a5zj"]
+
 # Logging via defmt. When off the driver is silent.
 defmt = ["dep:defmt"]
 

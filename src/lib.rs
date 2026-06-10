@@ -24,7 +24,9 @@ use embedded_graphics::{
 macro_rules! info { ($($t:tt)*) => { ::defmt::info!($($t)*); }; }
 #[cfg(not(feature = "defmt"))]
 #[allow(unused_macros)]
-macro_rules! info { ($($t:tt)*) => {}; }
+macro_rules! info {
+    ($($t:tt)*) => {};
+}
 
 // ─── public API ──────────────────────────────────────────────────────
 
@@ -70,7 +72,11 @@ impl DisplayBuilder {
     ///   the AHB matrix can't gather byte stores; see "MPU mapping"
     ///   in the README for why this is mandatory in practice).
     pub fn new(pins: DisplayPins) -> Self {
-        Self { pins, hclk_hz: 4_000_000, mpu_ns_region: Some(4) }
+        Self {
+            pins,
+            hclk_hz: 4_000_000,
+            mpu_ns_region: Some(4),
+        }
     }
 
     /// Override the HCLK frequency the busy-wait delays in the reset
@@ -142,7 +148,9 @@ impl Display {
         let _dc = cfg.pins.dc;
         let _cs = cfg.pins.cs;
 
-        unsafe { configure_fmc_bus(cfg.mpu_ns_region); }
+        unsafe {
+            configure_fmc_bus(cfg.mpu_ns_region);
+        }
         let bus = FmcBus;
         run_init_sequence(&bus, cycles_per_ms);
 
@@ -159,10 +167,14 @@ impl Display {
     /// Out-of-range coords are clamped to the panel; the call is a
     /// no-op if the rectangle is empty or fully off-screen.
     pub fn fill_rect(&self, x: u16, y: u16, w: u16, h: u16, color: Rgb565) {
-        if w == 0 || h == 0 { return; }
+        if w == 0 || h == 0 {
+            return;
+        }
         let x1 = (x + w - 1).min(PANEL_W - 1);
         let y1 = (y + h - 1).min(PANEL_H - 1);
-        if x > x1 || y > y1 { return; }
+        if x > x1 || y > y1 {
+            return;
+        }
         self.fill_rect_unchecked(x, y, x1, y1, color);
     }
 }
@@ -184,10 +196,14 @@ impl DrawTarget for Display {
         I: IntoIterator<Item = Pixel<Self::Color>>,
     {
         for Pixel(p, color) in pixels {
-            if p.x < 0 || p.y < 0 { continue; }
+            if p.x < 0 || p.y < 0 {
+                continue;
+            }
             let x = p.x as u32;
             let y = p.y as u32;
-            if x >= PANEL_W as u32 || y >= PANEL_H as u32 { continue; }
+            if x >= PANEL_W as u32 || y >= PANEL_H as u32 {
+                continue;
+            }
             let x = x as u16;
             let y = y as u16;
             self.set_window(x, y, x, y);
@@ -304,9 +320,11 @@ impl Display {
 
     fn set_window(&self, x0: u16, y0: u16, x1: u16, y1: u16) {
         self.bus.cmd(0x2A); // CASET
-        self.bus.data_slice(&[(x0 >> 8) as u8, x0 as u8, (x1 >> 8) as u8, x1 as u8]);
+        self.bus
+            .data_slice(&[(x0 >> 8) as u8, x0 as u8, (x1 >> 8) as u8, x1 as u8]);
         self.bus.cmd(0x2B); // PASET
-        self.bus.data_slice(&[(y0 >> 8) as u8, y0 as u8, (y1 >> 8) as u8, y1 as u8]);
+        self.bus
+            .data_slice(&[(y0 >> 8) as u8, y0 as u8, (y1 >> 8) as u8, y1 as u8]);
         self.bus.cmd(0x2C); // RAMWR
     }
 
@@ -343,9 +361,9 @@ unsafe fn set_gpio_af(port: GpioPort, pins: &[u8], af: u8) {
 
     for &p in pins {
         let p = p as u32;
-        rmw(moder, 0b11 << (p * 2), 0b10 << (p * 2));        // AF mode
-        rmw(ospeedr, 0b11 << (p * 2), 0b11 << (p * 2));      // very high speed
-        rmw(pupdr, 0b11 << (p * 2), 0);                       // no pull
+        rmw(moder, 0b11 << (p * 2), 0b10 << (p * 2)); // AF mode
+        rmw(ospeedr, 0b11 << (p * 2), 0b11 << (p * 2)); // very high speed
+        rmw(pupdr, 0b11 << (p * 2), 0); // no pull
         let af = (af as u32 & 0xF) << ((p & 7) * 4);
         let mask = 0xF << ((p & 7) * 4);
         let reg = if p < 8 { afrl } else { afrh };
@@ -377,16 +395,16 @@ unsafe fn widen_fmc_bcr1() {
     core::ptr::write_volatile(BCR1, v & !1); // MBKEN=0 (required to change MWID)
     cortex_m::asm::dsb();
     v = (v & !(0b11 << 4)) | (0b01 << 4); // MWID = 01 = 16-bit on U5
-    v |= 1;                                // MBKEN = 1
+    v |= 1; // MBKEN = 1
     core::ptr::write_volatile(BCR1, v);
     cortex_m::asm::dsb();
 }
 
 unsafe fn map_fmc_bank_device(region: u8) {
-    const MPU_NS_CTRL:  *mut u32 = 0xE000_ED94 as *mut u32;
-    const MPU_NS_RNR:   *mut u32 = 0xE000_ED98 as *mut u32;
-    const MPU_NS_RBAR:  *mut u32 = 0xE000_ED9C as *mut u32;
-    const MPU_NS_RLAR:  *mut u32 = 0xE000_EDA0 as *mut u32;
+    const MPU_NS_CTRL: *mut u32 = 0xE000_ED94 as *mut u32;
+    const MPU_NS_RNR: *mut u32 = 0xE000_ED98 as *mut u32;
+    const MPU_NS_RBAR: *mut u32 = 0xE000_ED9C as *mut u32;
+    const MPU_NS_RLAR: *mut u32 = 0xE000_EDA0 as *mut u32;
     const MPU_NS_MAIR0: *mut u32 = 0xE000_EDC0 as *mut u32;
 
     let ctrl_save = core::ptr::read_volatile(MPU_NS_CTRL);
@@ -400,7 +418,7 @@ unsafe fn map_fmc_bank_device(region: u8) {
 
     core::ptr::write_volatile(MPU_NS_RNR, region as u32);
     core::ptr::write_volatile(MPU_NS_RBAR, 0x6000_0000 | (0b01 << 1) | 1); // RWAny, XN
-    core::ptr::write_volatile(MPU_NS_RLAR, 0x6FFF_FFE0 | (3 << 1) | 1);    // AttrIndx=3, EN
+    core::ptr::write_volatile(MPU_NS_RLAR, 0x6FFF_FFE0 | (3 << 1) | 1); // AttrIndx=3, EN
 
     core::ptr::write_volatile(MPU_NS_CTRL, ctrl_save | 1);
     cortex_m::asm::dsb();
@@ -415,33 +433,41 @@ fn run_init_sequence(bus: &FmcBus, cycles_per_ms: u32) {
     // Positive gamma
     bus.cmd(0xE0);
     bus.data_slice(&[
-        0x00, 0x10, 0x14, 0x01, 0x0E, 0x04, 0x33, 0x56,
-        0x48, 0x03, 0x0C, 0x0B, 0x2B, 0x34, 0x0F,
+        0x00, 0x10, 0x14, 0x01, 0x0E, 0x04, 0x33, 0x56, 0x48, 0x03, 0x0C, 0x0B, 0x2B, 0x34, 0x0F,
     ]);
     // Negative gamma
     bus.cmd(0xE1);
     bus.data_slice(&[
-        0x00, 0x12, 0x18, 0x05, 0x12, 0x06, 0x40, 0x34,
-        0x57, 0x06, 0x10, 0x0C, 0x3B, 0x3F, 0x0F,
+        0x00, 0x12, 0x18, 0x05, 0x12, 0x06, 0x40, 0x34, 0x57, 0x06, 0x10, 0x0C, 0x3B, 0x3F, 0x0F,
     ]);
 
-    bus.cmd(0xC0); bus.data_slice(&[0x0F, 0x0C]);          // Power 1
-    bus.cmd(0xC1); bus.data(0x41);                          // Power 2
-    bus.cmd(0xC5); bus.data_slice(&[0x00, 0x25, 0x80]);    // VCOM
+    bus.cmd(0xC0);
+    bus.data_slice(&[0x0F, 0x0C]); // Power 1
+    bus.cmd(0xC1);
+    bus.data(0x41); // Power 2
+    bus.cmd(0xC5);
+    bus.data_slice(&[0x00, 0x25, 0x80]); // VCOM
 
-    bus.cmd(0x36); bus.data(0x7A);  // MADCTL — landscape 480×320, BGR
-    bus.cmd(0x3A); bus.data(0x55);  // COLMOD — RGB565
+    bus.cmd(0x36);
+    bus.data(0x7A); // MADCTL — landscape 480×320, BGR
+    bus.cmd(0x3A);
+    bus.data(0x55); // COLMOD — RGB565
 
-    bus.cmd(0xB0); bus.data(0x00);                          // Interface mode
-    bus.cmd(0xB1); bus.data(0xA0);                          // Frame rate
-    bus.cmd(0xB4); bus.data(0x02);                          // Inversion
-    bus.cmd(0xB6); bus.data_slice(&[0x02, 0x22]);          // Display function
+    bus.cmd(0xB0);
+    bus.data(0x00); // Interface mode
+    bus.cmd(0xB1);
+    bus.data(0xA0); // Frame rate
+    bus.cmd(0xB4);
+    bus.data(0x02); // Inversion
+    bus.cmd(0xB6);
+    bus.data_slice(&[0x02, 0x22]); // Display function
 
     bus.cmd(0x21); // Inversion ON (required on this IPS module)
 
     bus.cmd(0x11); // Sleep out
     cortex_m::asm::delay(120 * cycles_per_ms);
 
-    bus.cmd(0x35); bus.data(0x00); // Tearing-effect line on
+    bus.cmd(0x35);
+    bus.data(0x00); // Tearing-effect line on
     bus.cmd(0x29); // Display on
 }
