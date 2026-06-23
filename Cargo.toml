@@ -1,14 +1,14 @@
 [package]
 name = "riverdi-rva35hi-stm32u5-embassy"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "ILI9488 driver (Embassy-only) for the Riverdi RVA35HI-NUC144A 3.5\" LCD shield over STM32U5 FMC 8080 parallel, with embedded-graphics integration"
 repository = "https://github.com/r3dlight/riverdi-rva35hi-stm32u5-embassy"
 readme = "README.md"
 keywords = ["embassy", "stm32u5", "ili9488", "lcd", "no-std"]
 categories = ["embedded", "no-std", "hardware-support"]
-rust-version = "1.81"
+rust-version = "1.85"
 
 [features]
 # stm32u575zi is on by default so the crate builds standalone for `cargo doc`

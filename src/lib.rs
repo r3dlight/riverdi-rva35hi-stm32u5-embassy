@@ -5,10 +5,10 @@
 use embassy_stm32::{
     gpio::{Level, Output, Speed},
     pac,
-    peripherals::{PB8, PD7, PE11, PE4},
+    peripherals::{PB8, PD7, PE4, PE11},
 };
 use embedded_graphics::{
-    pixelcolor::{raw::RawU16, Rgb565},
+    pixelcolor::{Rgb565, raw::RawU16},
     prelude::*,
     primitives::Rectangle,
 };
@@ -344,85 +344,95 @@ enum GpioPort {
 
 #[inline(always)]
 unsafe fn rmw(addr: *mut u32, clear_mask: u32, set: u32) {
-    let v = core::ptr::read_volatile(addr);
-    core::ptr::write_volatile(addr, (v & !clear_mask) | set);
+    unsafe {
+        let v = core::ptr::read_volatile(addr);
+        core::ptr::write_volatile(addr, (v & !clear_mask) | set);
+    }
 }
 
 unsafe fn set_gpio_af(port: GpioPort, pins: &[u8], af: u8) {
-    let base = match port {
-        GpioPort::D => 0x4202_0C00usize,
-        GpioPort::E => 0x4202_1000usize,
-    };
-    let moder = base as *mut u32;
-    let ospeedr = (base + 0x08) as *mut u32;
-    let pupdr = (base + 0x0C) as *mut u32;
-    let afrl = (base + 0x20) as *mut u32;
-    let afrh = (base + 0x24) as *mut u32;
+    unsafe {
+        let base = match port {
+            GpioPort::D => 0x4202_0C00usize,
+            GpioPort::E => 0x4202_1000usize,
+        };
+        let moder = base as *mut u32;
+        let ospeedr = (base + 0x08) as *mut u32;
+        let pupdr = (base + 0x0C) as *mut u32;
+        let afrl = (base + 0x20) as *mut u32;
+        let afrh = (base + 0x24) as *mut u32;
 
-    for &p in pins {
-        let p = p as u32;
-        rmw(moder, 0b11 << (p * 2), 0b10 << (p * 2)); // AF mode
-        rmw(ospeedr, 0b11 << (p * 2), 0b11 << (p * 2)); // very high speed
-        rmw(pupdr, 0b11 << (p * 2), 0); // no pull
-        let af = (af as u32 & 0xF) << ((p & 7) * 4);
-        let mask = 0xF << ((p & 7) * 4);
-        let reg = if p < 8 { afrl } else { afrh };
-        rmw(reg, mask, af);
+        for &p in pins {
+            let p = p as u32;
+            rmw(moder, 0b11 << (p * 2), 0b10 << (p * 2)); // AF mode
+            rmw(ospeedr, 0b11 << (p * 2), 0b11 << (p * 2)); // very high speed
+            rmw(pupdr, 0b11 << (p * 2), 0); // no pull
+            let af = (af as u32 & 0xF) << ((p & 7) * 4);
+            let mask = 0xF << ((p & 7) * 4);
+            let reg = if p < 8 { afrl } else { afrh };
+            rmw(reg, mask, af);
+        }
     }
 }
 
 unsafe fn configure_fmc_bus(mpu_ns_region: Option<u8>) {
-    pac::RCC.ahb2enr2().modify(|w| w.set_fsmcen(true));
-    cortex_m::asm::dsb();
+    unsafe {
+        pac::RCC.ahb2enr2().modify(|w| w.set_fsmcen(true));
+        cortex_m::asm::dsb();
 
-    // The 11 pins routed to actual LCD signals — verified against
-    // the Riverdi schematic. PE11 is deliberately absent here so
-    // its AF12 (= FMC_D8) doesn't fight the LCD_RESET wire.
-    set_gpio_af(GpioPort::D, &[0, 1, 4, 5, 7, 14, 15], 12);
-    set_gpio_af(GpioPort::E, &[4, 7, 8, 9, 10], 12);
-    cortex_m::asm::dsb();
-    cortex_m::asm::isb();
+        // The 11 pins routed to actual LCD signals — verified against
+        // the Riverdi schematic. PE11 is deliberately absent here so
+        // its AF12 (= FMC_D8) doesn't fight the LCD_RESET wire.
+        set_gpio_af(GpioPort::D, &[0, 1, 4, 5, 7, 14, 15], 12);
+        set_gpio_af(GpioPort::E, &[4, 7, 8, 9, 10], 12);
+        cortex_m::asm::dsb();
+        cortex_m::asm::isb();
 
-    widen_fmc_bcr1();
-    if let Some(region) = mpu_ns_region {
-        map_fmc_bank_device(region);
+        widen_fmc_bcr1();
+        if let Some(region) = mpu_ns_region {
+            map_fmc_bank_device(region);
+        }
     }
 }
 
 unsafe fn widen_fmc_bcr1() {
-    const BCR1: *mut u32 = 0x420D_0400 as *mut u32;
-    let mut v = core::ptr::read_volatile(BCR1);
-    core::ptr::write_volatile(BCR1, v & !1); // MBKEN=0 (required to change MWID)
-    cortex_m::asm::dsb();
-    v = (v & !(0b11 << 4)) | (0b01 << 4); // MWID = 01 = 16-bit on U5
-    v |= 1; // MBKEN = 1
-    core::ptr::write_volatile(BCR1, v);
-    cortex_m::asm::dsb();
+    unsafe {
+        const BCR1: *mut u32 = 0x420D_0400 as *mut u32;
+        let mut v = core::ptr::read_volatile(BCR1);
+        core::ptr::write_volatile(BCR1, v & !1); // MBKEN=0 (required to change MWID)
+        cortex_m::asm::dsb();
+        v = (v & !(0b11 << 4)) | (0b01 << 4); // MWID = 01 = 16-bit on U5
+        v |= 1; // MBKEN = 1
+        core::ptr::write_volatile(BCR1, v);
+        cortex_m::asm::dsb();
+    }
 }
 
 unsafe fn map_fmc_bank_device(region: u8) {
-    const MPU_NS_CTRL: *mut u32 = 0xE000_ED94 as *mut u32;
-    const MPU_NS_RNR: *mut u32 = 0xE000_ED98 as *mut u32;
-    const MPU_NS_RBAR: *mut u32 = 0xE000_ED9C as *mut u32;
-    const MPU_NS_RLAR: *mut u32 = 0xE000_EDA0 as *mut u32;
-    const MPU_NS_MAIR0: *mut u32 = 0xE000_EDC0 as *mut u32;
+    unsafe {
+        const MPU_NS_CTRL: *mut u32 = 0xE000_ED94 as *mut u32;
+        const MPU_NS_RNR: *mut u32 = 0xE000_ED98 as *mut u32;
+        const MPU_NS_RBAR: *mut u32 = 0xE000_ED9C as *mut u32;
+        const MPU_NS_RLAR: *mut u32 = 0xE000_EDA0 as *mut u32;
+        const MPU_NS_MAIR0: *mut u32 = 0xE000_EDC0 as *mut u32;
 
-    let ctrl_save = core::ptr::read_volatile(MPU_NS_CTRL);
-    core::ptr::write_volatile(MPU_NS_CTRL, ctrl_save & !1); // disable MPU
-    cortex_m::asm::dsb();
-    cortex_m::asm::isb();
+        let ctrl_save = core::ptr::read_volatile(MPU_NS_CTRL);
+        core::ptr::write_volatile(MPU_NS_CTRL, ctrl_save & !1); // disable MPU
+        cortex_m::asm::dsb();
+        cortex_m::asm::isb();
 
-    // MAIR0 slot 3 ← Device-nGnRnE (0x00); slots 0/1/2 untouched.
-    let mair0 = core::ptr::read_volatile(MPU_NS_MAIR0);
-    core::ptr::write_volatile(MPU_NS_MAIR0, mair0 & 0x00FF_FFFF);
+        // MAIR0 slot 3 ← Device-nGnRnE (0x00); slots 0/1/2 untouched.
+        let mair0 = core::ptr::read_volatile(MPU_NS_MAIR0);
+        core::ptr::write_volatile(MPU_NS_MAIR0, mair0 & 0x00FF_FFFF);
 
-    core::ptr::write_volatile(MPU_NS_RNR, region as u32);
-    core::ptr::write_volatile(MPU_NS_RBAR, 0x6000_0000 | (0b01 << 1) | 1); // RWAny, XN
-    core::ptr::write_volatile(MPU_NS_RLAR, 0x6FFF_FFE0 | (3 << 1) | 1); // AttrIndx=3, EN
+        core::ptr::write_volatile(MPU_NS_RNR, region as u32);
+        core::ptr::write_volatile(MPU_NS_RBAR, 0x6000_0000 | (0b01 << 1) | 1); // RWAny, XN
+        core::ptr::write_volatile(MPU_NS_RLAR, 0x6FFF_FFE0 | (3 << 1) | 1); // AttrIndx=3, EN
 
-    core::ptr::write_volatile(MPU_NS_CTRL, ctrl_save | 1);
-    cortex_m::asm::dsb();
-    cortex_m::asm::isb();
+        core::ptr::write_volatile(MPU_NS_CTRL, ctrl_save | 1);
+        cortex_m::asm::dsb();
+        cortex_m::asm::isb();
+    }
 }
 
 /// Vendor ILI9488 init sequence, copied verbatim from Riverdi's
